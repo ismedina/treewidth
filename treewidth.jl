@@ -70,12 +70,28 @@ to be a clique. Returns this number of edges and the edges themselves.
 function lacking_for_clique_neigh(G::Graph, i::Int)
     neigh = neighbors(G,i)
     lacking = Tuple{Int,Int}[]
-    for (j, i2) in enumerate(neigh)
-        for i1 in neigh[1:j-1]
-            has_edge(G, i1, i2) ? nothing : push!(lacking, (i1, i2))
+    for j in eachindex(neigh)
+        for k in 1:j-1
+            if ! has_edge(G, neigh[j], neigh[k])
+                push!(lacking, (neigh[j], neigh[k]))
+            end
         end
     end
     return length(lacking), lacking
+end
+
+function n_lacking_for_clique_neigh(G::Graph, i::Int)
+    neigh = neighbors(G,i)
+    #lacking = Tuple{Int,Int}[]
+    n_lacking = 0
+    for j in eachindex(neigh)
+        for k in 1:j-1
+            if ! has_edge(G, neigh[j], neigh[k])
+                n_lacking += 1
+            end
+        end
+    end
+    return n_lacking
 end
 
 """
@@ -102,6 +118,16 @@ function rem_vertex_fill!(G::Graph, i::Int, lacking::Vector{Tuple{Int,Int}},
     end
 end
 
+function rem_vertex_no_fill!(G::Graph, i::Int,
+                          ordering::Vector{Int}, vertex_label)
+    push!(ordering, vertex_label[i])
+    rem_vertex!(G, i)
+    v = pop!(vertex_label)
+    if i ≤ nv(G)
+        vertex_label[i] = v
+    end
+end
+
 
 """
     min_fill_ordering(G)
@@ -112,19 +138,19 @@ Find an ordering of the vertices of `G` using the min-fill heuristic
 function min_fill_ordering(G::Graph)
     H = copy(G)
     ordering = Int[]
-    no_lacking = Tuple{Int,Int}[] # to pass when there is no edge lacking
+    #no_lacking = Tuple{Int,Int}[] # to pass when there is no edge lacking
     vertex_label = collect(1:nv(H))
     while nv(H) > 0
         success = false
         for i in nv(H):-1:1
             if degree(H, i) == 0
-                rem_vertex_fill!(H, i, no_lacking, ordering, vertex_label)
+                rem_vertex_no_fill!(H, i, ordering, vertex_label)
                 success = true
             end
         end
         for i in nv(H):-1:1
             if degree(H, i) == 1
-                rem_vertex_fill!(H, i, no_lacking, ordering, vertex_label)
+                rem_vertex_no_fill!(H, i, ordering, vertex_label)
                 success = true
             end
         end
@@ -136,23 +162,26 @@ function min_fill_ordering(G::Graph)
             found_clique = false
             v = 0
             best_n_lacking = Inf
-            best_lacking = Tuple{Int,Int}[]
+            #best_lacking = Tuple{Int,Int}[]
             for i in 1:nv(H)
                 j = J[i]
-                n_lacking, lacking = lacking_for_clique_neigh(H, j)
+                #n_lacking, lacking = lacking_for_clique_neigh(H, j)
+                n_lacking = n_lacking_for_clique_neigh(H, j)
                 if n_lacking == 0
-                    rem_vertex_fill!(H, j, lacking, ordering, vertex_label)
+                    rem_vertex_no_fill!(H, j, ordering, vertex_label)
                     found_clique = true
                     break
                 elseif n_lacking < best_n_lacking
                     v = j
                     best_n_lacking = n_lacking
-                    best_lacking = lacking
+                    #best_lacking = lacking
                 end
             end
             # if running until here, remove v
             if ! found_clique
+                best_n_lacking, best_lacking = lacking_for_clique_neigh(H, v)
                 rem_vertex_fill!(H, v, best_lacking, ordering, vertex_label)
+                #print("h")
             end
         end
     end
